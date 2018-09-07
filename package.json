@@ -1,0 +1,15 @@
+{
+  "name": "vuex-class-component",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "tsc -outDir dist -p ."
+  },
+  "dependencies": {
+    "vuex": "^3.0.1"
+  },
+  "devDependencies": {
+    "vue": "^2.5.17",
+    "@types/node": "^10.9.4",
+    "typescript": "^3.0.3"
+  }
+}
