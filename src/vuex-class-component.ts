@@ -172,7 +172,7 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
         }
       };
     } else {
-      //写入state
+      //写入stateF
       set = (payload: any) => {
         //当Store初始化完成后，直接代理成对store.state的访问
         if (vm.store) {
@@ -244,16 +244,16 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
         //getters
         vm.getters[key] = (s: any, g: any, rs: any, rg: any): any => {
           return (...payloads: any[]) => {
-            return desc.value.apply(vm, [
-              ...payloads,
-              {
+            return desc.value.apply(
+              vm,
+              getApplyArgs(desc.value, [...payloads], {
                 state: s,
                 getters: g,
                 rootState: rs,
                 rootGetters: rg,
-                store: vm.store
-              }
-            ]);
+                store: vm.store as Store<any>
+              })
+            );
           };
         };
         newDesc.get = () => {
@@ -263,10 +263,13 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
         //mutations
       } else if (base[mutationKeys] && base[mutationKeys][key]) {
         vm.mutations[key] = (state: any, payloads: any) => {
-          desc.value.apply(vm, [
-            ...payloads,
-            { state: state, store: vm.store }
-          ]);
+          desc.value.apply(
+            vm,
+            getApplyArgs(desc.value, [...payloads], {
+              state: state,
+              store: vm.store
+            })
+          );
         };
         newDesc.get = () => {
           return (...payloads: any[]) => {
@@ -277,10 +280,13 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
         //actions
       } else {
         vm.actions[key] = (context: any, payloads: any): any => {
-          return desc.value.apply(vm, [
-            ...payloads,
-            { context: context, store: vm.store }
-          ]);
+          return desc.value.apply(
+            vm,
+            getApplyArgs(desc.value, [...payloads], {
+              context: context,
+              store: vm.store
+            })
+          );
         };
         newDesc.value = (...payloads: any[]): Promise<any> => {
           return (vm.store as Store<any>).dispatch(vuexKey, payloads);
@@ -306,4 +312,43 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
   //
   construct.prototype = vm;
   return construct;
+}
+
+function getApplyArgs(fn: Function, s: any[], vuexArg: any) {
+  let argCount = getArgCount(fn);
+  if (s.length < argCount) {
+    s[argCount] = vuexArg;
+  } else {
+    s.push(vuexArg);
+  }
+  return s;
+}
+
+//
+const R_DEFAULT_ARGS = /var.*=\s*arguments.length\s*>\s*[0-9]+\s*&&\s*arguments\[[0-9]+\]\s*!==\s*undefined\s*\?\s*arguments\[[0-9]+\]\s*:\s*.*;/gm;
+
+function getArgCount(fn: Function): number {
+  let code: string = fn.toString();
+  //console.log(code);
+
+  //外部定义
+  let argStr: string = code.slice(code.indexOf("(") + 1, code.indexOf(")"));
+  let perDefaultArgs;
+  if (argStr != "") {
+    perDefaultArgs = argStr.split(",");
+  }
+  let perDefaultArgCount = 0;
+  if (perDefaultArgs != null) {
+    perDefaultArgCount = perDefaultArgs.length;
+  }
+
+  //获取方法体内部的默认参数
+  let innerDefaultArgs = code.match(R_DEFAULT_ARGS);
+  let innerDefaultArgCount = 0;
+  if (innerDefaultArgs != null) {
+    innerDefaultArgCount = innerDefaultArgs.length;
+  }
+
+  //console.log(innerDefaultArgCount, perDefaultArgCount);
+  return innerDefaultArgCount + perDefaultArgCount;
 }

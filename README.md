@@ -182,3 +182,27 @@ public change(newName:string,newSex:number):any{
     ...
 }
 ```
+
+### 类方法支持默认参数
+
+```ts
+import {Getter,Mutation,GetterArgs,MutationArgs,ActionArgs} from "vuex-class-component"
+
+@Getter
+public getByID(id:number=1):any{
+    let args:GetterArgs=arguments[arguments.length-1]
+    ...
+}
+
+@Mutation
+public getByName(name:string="aaa"):any{
+    let args:MutationArgs=arguments[arguments.length-1]
+    ...
+}
+
+//
+public change(newName:string,newSex:number="default"):any{
+    let args:ActionArgs=arguments[arguments.length-1]
+    ...
+}
+```
