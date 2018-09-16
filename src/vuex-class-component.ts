@@ -348,13 +348,13 @@ function getArgCount(fn: Function): number {
 
   //外部定义
   let argStr: string = code.slice(code.indexOf("(") + 1, code.indexOf(")"));
-  let perDefaultArgs;
+  let defaultArgs;
   if (argStr != "") {
-    perDefaultArgs = argStr.split(",");
+    defaultArgs = argStr.split(",");
   }
-  let perDefaultArgCount = 0;
-  if (perDefaultArgs != null) {
-    perDefaultArgCount = perDefaultArgs.length;
+  let defaultArgCount = 0;
+  if (defaultArgs != null) {
+    defaultArgCount = defaultArgs.length;
   }
 
   //获取方法体内部的默认参数
@@ -365,5 +365,5 @@ function getArgCount(fn: Function): number {
   }
 
   //console.log(innerDefaultArgCount, perDefaultArgCount);
-  return innerDefaultArgCount + perDefaultArgCount;
+  return innerDefaultArgCount + defaultArgCount;
 }
