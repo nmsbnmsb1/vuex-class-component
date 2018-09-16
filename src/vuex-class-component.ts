@@ -80,6 +80,7 @@ interface VuexModule {
   actions: any;
   mutations: any;
   store: Store<any> | undefined;
+  argCountCache: { [key: string]: number };
 }
 
 export interface GetterArgs {
@@ -124,7 +125,8 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
     getters: {},
     mutations: {},
     actions: {},
-    store: undefined
+    store: undefined,
+    argCountCache: {}
   };
 
   //State
@@ -246,7 +248,7 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
           return (...payloads: any[]) => {
             return desc.value.apply(
               vm,
-              getApplyArgs(desc.value, [...payloads], {
+              getApplyArgs(vm, key, desc.value, [...payloads], {
                 state: s,
                 getters: g,
                 rootState: rs,
@@ -265,7 +267,7 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
         vm.mutations[key] = (state: any, payloads: any) => {
           desc.value.apply(
             vm,
-            getApplyArgs(desc.value, [...payloads], {
+            getApplyArgs(vm, key, desc.value, [...payloads], {
               state: state,
               store: vm.store
             })
@@ -282,7 +284,7 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
         vm.actions[key] = (context: any, payloads: any): any => {
           return desc.value.apply(
             vm,
-            getApplyArgs(desc.value, [...payloads], {
+            getApplyArgs(vm, key, desc.value, [...payloads], {
               context: context,
               store: vm.store
             })
@@ -314,8 +316,21 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
   return construct;
 }
 
-function getApplyArgs(fn: Function, s: any[], vuexArg: any) {
-  let argCount = getArgCount(fn);
+function getApplyArgs(
+  vm: VuexModule,
+  key: string,
+  fn: Function,
+  s: any[],
+  vuexArg: any
+) {
+  let argCount = 0;
+  if (vm.argCountCache[key] == null) {
+    argCount = getArgCount(fn);
+    vm.argCountCache[key] = argCount;
+  } else {
+    argCount = vm.argCountCache[key];
+  }
+  //
   if (s.length < argCount) {
     s[argCount] = vuexArg;
   } else {
