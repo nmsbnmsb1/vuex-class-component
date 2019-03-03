@@ -406,7 +406,6 @@ function getArgCount(fn: Function): number {
   if (innerDefaultArgs != null) {
     innerDefaultArgCount = innerDefaultArgs.length;
   }
-
   //console.log(innerDefaultArgCount, perDefaultArgCount);
   return innerDefaultArgCount + defaultArgCount;
 }

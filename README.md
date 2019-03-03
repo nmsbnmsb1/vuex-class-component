@@ -16,6 +16,8 @@ const other: OtherModel = new OtherModel();
 export default { app, user, other };
 ```
 
+Vue can also call their methods.
+
 ### Example
 
 define moudles
