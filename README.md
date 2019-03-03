@@ -6,15 +6,6 @@
 
 Maybe not use vuex is another option?
 
-store struct will like
-
--store
--- index
--- appModel
--- userModel
--- otherModel
-...
-
 in store/index.ts
 
 ```ts
