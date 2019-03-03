@@ -2,22 +2,6 @@
 
 > 使用 ECMAScript / TypeScript 类语法编写 Vuex 模块。可以使用类语法调用 store 的各种方法。
 
-### Update
-
-Maybe not use vuex is another option?
-
-in store/index.ts
-
-```ts
-const app: AppModel = new AppModel();
-const user: UserModel = new UserModel();
-const other: OtherModel = new OtherModel();
-
-export default { app, user, other };
-```
-
-Vue can also call their methods.
-
 ### Example
 
 define moudles
@@ -122,7 +106,7 @@ export default store;
 use in .vue
 @/app.vue
 
-```vue
+```ts
 <template>
   <div id="app"></div>
 </template>
