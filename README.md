@@ -2,45 +2,67 @@
 
 > 使用 ECMAScript / TypeScript 类语法编写 Vuex 模块。可以使用类语法调用 store 的各种方法。
 
+### Update
+
+Maybe not use vuex is another option?
+
+store struct will like
+
+-store
+-- index
+-- appModel
+-- userModel
+-- otherModel
+...
+
+in store/index.ts
+
+```ts
+const app: AppModel = new AppModel();
+const user: UserModel = new UserModel();
+const other: OtherModel = new OtherModel();
+
+export default { app, user, other };
+```
+
 ### Example
 
-定义子模块
+define moudles
 @/store/modules/user.ts
 
 ```ts
-import { VuexClass, Getter, Mutation } from "vuex-class-component";
+import {
+  VuexClass,
+  Constructor,
+  Getter,
+  Mutation,
+  Exclude
+} from "vuex-class-component";
 
-// state 用户数据类型定义
+// state
 @VuexClass({ name: "user" })
 export default class UserState {
-  //实例属性自动转换为store.state.user 属性
+  //convert to => store.state.user.id
+  //convert to => store.mutations["user/id"]
   public id: string = "id";
 
-  //手动编写getter/setter属性
-  private _name: string = "";
-  //setter设置为store.mutations
-  public set name(name: string) {
-    this._name = name;
-  }
-  //getter设置为store.getters
-  public get name(): string {
-    return this._name;
-  }
-
-  //使用Getter修饰属性，把属性设置为store.getters["user/sex"]
+  //convert to => store.state.user.sex
+  //convert to => store.getters["user/sex"]
+  //convert to => store.mutations["user/sex"]
   @Getter
   public sex: number = 1;
 
-  //使用Mutation修饰属性，把属性设置为store.mutations["user/birth"]
-  @Mutation
-  public birth: string = "1970-01-01";
+  // since in VuexClass function
+  // we will new UserState() to get some instance variables
+  // so it's not recommand add initialize function here
+  // instead use @Constructor
+  // it'll be called when we new UserState()
+  constructor() {}
 
-  //也可以同时修饰
-  @Getter
-  @Mutation
-  public nickName: string = "";
+  @Constructor
+  public init() {}
 
-  //把方法设置为Getter
+  //convert to => store.getters["user/getNameWithSex"]
   @Getter
   public getNameWithSex(sex: number): string {
     if (sex == 1) {
@@ -49,7 +71,7 @@ export default class UserState {
     return this._name;
   }
 
-  //把方法设置为Mutation
+  //convert to => store.mutations["user/setNameWithSex"]
   @Mutation
   public setNameWithSex(sex: number) {
     if (sex == 1) {
@@ -57,7 +79,7 @@ export default class UserState {
     }
   }
 
-  // 普通方法设置为Action，参数可以随意设置
+  //convert to => store.actions["user/change"]
   public change(newName: string, newSex: number): Promise<any> {
     return http
       .request({
@@ -74,10 +96,16 @@ export default class UserState {
         }
       );
   }
+
+  // won't add to store instance
+  @Exclude
+  private doTest() {
+    console.log("just a test");
+  }
 }
 ```
 
-定义 store
+define store
 @/store/index.ts
 
 ```ts
@@ -88,7 +116,7 @@ import { createStore } from "./vuex-class-component";
 
 Vue.use(Vuex);
 
-//子模块
+//modules
 export let user: User = new User();
 
 //store
@@ -98,13 +126,12 @@ const store = createStore(false, {
 export default store;
 ```
 
-在 vue 中调用
+use in .vue
 @/app.vue
 
 ```vue
 <template>
-  <div id="app">
-  </div>
+  <div id="app"></div>
 </template>
 
 <script lang="ts">
@@ -138,19 +165,19 @@ export default class App extends Vue {
 </script>
 ```
 
-### @VuexClass 修饰器
+### @VuexClass
 
 ```ts
-//1.没有参数，模块namespaced=false
+//1.namespaced=false
 @VuexClass
 export default class App {}
 
-//2.有参数，设置子模块磨成,namaspaced=true，store中使用 "app/**" 访问
+//2.namaspaced=true
 @VuexClass({ name: "app" })
 export default class App {}
 ```
 
-### 创建 store 时，root 选项可以指定根 state
+### use "root"
 
 ```ts
 let root = new Root();
@@ -162,7 +189,7 @@ const store = createStore(false, {
 });
 ```
 
-### 类内部可以获取 vuex 传入参数
+### get vuex args inside function
 
 ```ts
 import {GetterArgs,MutationArgs,ActionArgs} from "vuex-class-component"
@@ -183,7 +210,7 @@ public change(newName:string,newSex:number):any{
 }
 ```
 
-### 类方法支持默认参数
+### support arg default value
 
 ```ts
 import {Getter,Mutation,GetterArgs,MutationArgs,ActionArgs} from "vuex-class-component"

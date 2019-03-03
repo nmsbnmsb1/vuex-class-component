@@ -1,7 +1,7 @@
 import Vuex, { Store, StoreOptions, Plugin } from "vuex";
 
 //Plugin
-const actionName: string = "__vcc_act_name";
+const actionName: string = "__vcc_action";
 export const VuexClassPlugin: Plugin<any> = (store: Store<any>) => {
   // 把 store 传入所有的实例中
   store.dispatch(actionName, store);
@@ -26,53 +26,76 @@ export function createOptions(
   modules: Modules,
   plugins?: Plugin<any>[]
 ): StoreOptions<any> {
-  let op: StoreOptions<any> = {};
-  op.strict = strict;
+  let opt: StoreOptions<any> = {};
+  opt.strict = strict;
   if (modules.root) {
-    op.state = modules.root.state;
-    op.getters = modules.root.getters;
-    op.actions = modules.root.actions;
-    op.mutations = modules.root.mutations;
+    opt.state = modules.root.state;
+    opt.getters = modules.root.getters;
+    opt.actions = modules.root.actions;
+    opt.mutations = modules.root.mutations;
   }
   for (let name in modules) {
     if (name !== "root") {
-      (op.modules || (op.modules = {}))[name] = modules[name];
+      (opt.modules || (opt.modules = {}))[name] = modules[name];
     }
   }
-  op.plugins = [VuexClassPlugin];
+  opt.plugins = [VuexClassPlugin];
   if (plugins && plugins.length > 0) {
     for (let i: number = 0, len: number = plugins.length; i < len; i++) {
-      op.plugins.push(plugins[i]);
+      opt.plugins.push(plugins[i]);
     }
   }
-  return op;
+  return opt;
 }
 
 //------------------------------------------------------------------------------------------------------------------------
-//Getter修饰器,标记为Getter
-const getterKeys: string = "$getter$";
-export function Getter(
-  target: any,
-  name: string,
-  desc?: PropertyDescriptor
-): any {
-  (target[getterKeys] || (target[getterKeys] = {}))[name] = 1;
+function donothing(target: any, key: string, desc?: PropertyDescriptor): any {
   return desc;
 }
+function marker(marker: string) {
+  return function(target: any, key: string, desc?: PropertyDescriptor): any {
+    (target[marker] || (target[marker] = {}))[key] = 1;
+    return desc;
+  };
+}
+function hasMarker(target: any, marker: string, key: string): boolean {
+  return target[marker] && target[marker][key];
+}
+// function defaultMarker(target: any, key: string): boolean {
+//   return (
+//     !hasMarker(target, stateKey, key) &&
+//     !hasMarker(target, getterKey, key) &&
+//     !hasMarker(target, mutationKey, key) &&
+//     !hasMarker(target, actionKey, key) &&
+//     !hasMarker(target, excludeKey, key)
+//   );
+// }
 
-//Mutation修饰器,标记为Mutation
-const mutationKeys: string = "$mutation$";
-export function Mutation(
+const constructorKey: string = "$_constructor_$";
+//const stateKey: string = "$_state_$";
+const getterKey: string = "$_getter_$";
+const mutationKey: string = "$_mutation_$";
+//const actionKey: string = "$_action_$";
+const excludeKey: string = "$_exclude_$";
+
+export let Constructor = function(
   target: any,
-  name: string,
+  key: string,
   desc?: PropertyDescriptor
 ): any {
-  (target[mutationKeys] || (target[mutationKeys] = {}))[name] = 1;
+  target[constructorKey] = key;
   return desc;
-}
+};
+export let State = donothing;
+export let Getter = marker(getterKey);
+export let Mutation = marker(mutationKey);
+export let Action = donothing;
+export let Exclude = marker(excludeKey);
 
 //
 interface VuexModule {
+  sign?: string;
+  base: any;
   namespaced: boolean;
   moduleName: string;
   state: any;
@@ -81,6 +104,7 @@ interface VuexModule {
   mutations: any;
   store: Store<any> | undefined;
   argCountCache: { [key: string]: number };
+  [key: string]: any;
 }
 
 export interface GetterArgs {
@@ -118,7 +142,10 @@ export function VuexClass(options?: VuexClassOptions | Function): any {
 //动态的生成Vuex模块
 function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
   const base: any = construct.prototype;
+
+  //新的基类
   const vm: VuexModule = {
+    base,
     namespaced: options.name ? true : false,
     moduleName: options.name ? (options.name as string) : "",
     state: {},
@@ -130,73 +157,72 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
   };
 
   //State
-  const instance: any = new construct();
+  let instance: any = new construct();
+  //console.log(construct.toString());
   Object.keys(instance).forEach((key: string) => {
+    //如果只是一个安静的美属性
+    if (hasMarker(instance, excludeKey, key)) {
+      vm[key] = instance[key];
+      return;
+    }
+
     //实例属性设置state
+    const vuexKey: string = vm.namespaced ? vm.moduleName + "/" + key : key;
+    const newDesc: PropertyDescriptor = {
+      // configurable: desc.configurable,
+      // enumerable: desc.enumerable
+    };
+
     vm.state[key] = instance[key];
 
-    //设置实例属性getter/setter
-    const vuexKey: string = vm.namespaced ? vm.moduleName + "/" + key : key;
-    let get: any, set: any;
-    //如果属性需要挂在的Mutation上
-    if (base[getterKeys] && base[getterKeys][key]) {
+    //@Getter
+    if (hasMarker(instance, getterKey, key)) {
       vm.getters[key] = (s: any, g: any, rs: any, rg: any): any => {
         return s[key];
       };
-      get = () => {
-        if (vm.store) {
-          return (vm.store as Store<any>).getters[vuexKey];
-        }
-        return vm.state[key];
+      newDesc.get = () => {
+        return vm.store
+          ? (vm.store as Store<any>).getters[vuexKey]
+          : vm.state[key];
       };
     } else {
-      get = () => {
+      newDesc.get = () => {
         //当Store初始化完成后，直接代理成对store.state的访问
         if (vm.store) {
           let state = (vm.store as Store<any>).state;
           return vm.namespaced ? state[vm.moduleName][key] : state[key];
         }
-        //当Store未初始化时，直接读取当前state的值
         return vm.state[key];
       };
     }
 
-    //如果属性需要挂在的Mutation上
-    if (base[mutationKeys] && base[mutationKeys][key]) {
-      vm.mutations[key] = (state: any, payload: any) => {
-        state[key] = payload;
-      };
-      set = (payload: any) => {
-        if (vm.store) {
-          (vm.store as Store<any>).commit(vuexKey, payload);
-        } else {
-          vm.state[key] = payload;
-        }
-      };
-    } else {
-      //写入stateF
-      set = (payload: any) => {
-        //当Store初始化完成后，直接代理成对store.state的访问
-        if (vm.store) {
-          let state = (vm.store as Store<any>).state;
-          vm.namespaced
-            ? (state[vm.moduleName][key] = payload)
-            : (state[key] = payload);
-        } else {
-          //当Store未初始化时，直接设置当前state的值
-          vm.state[key] = payload;
-        }
-      };
-    }
-    Object.defineProperty(vm, key, { get, set });
+    //@Mutation
+    vm.mutations[key] = (state: any, payload: any) => {
+      state[key] = payload;
+    };
+    newDesc.set = (payload: any) => {
+      vm.store
+        ? (vm.store as Store<any>).commit(vuexKey, payload)
+        : (vm.state[key] = payload);
+    };
+
+    Object.defineProperty(vm, key, newDesc);
   });
+  instance = null;
 
   //获取类对象属性
   Object.getOwnPropertyNames(base).forEach(key => {
-    if (key === "constructor" || key === getterKeys || key === mutationKeys) {
+    if (key === "constructor" || (key.startsWith("$_") && key.endsWith("_$")))
+      return;
+
+    //
+    if (hasMarker(base, excludeKey, key)) {
+      vm[key] = base[key];
+      return;
+    } else if (base[constructorKey] && base[constructorKey] === key) {
+      vm[constructorKey] = base[key];
       return;
     }
-
     //
     const vuexKey: string = vm.namespaced ? vm.moduleName + "/" + key : key;
     const desc = Object.getOwnPropertyDescriptor(
@@ -223,7 +249,9 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
         ]);
       };
       newDesc.get = () => {
-        return (vm.store as Store<any>).getters[vuexKey];
+        return vm.store
+          ? (vm.store as Store<any>).getters[vuexKey]
+          : (desc.get as Function).apply(vm);
       };
     }
 
@@ -236,14 +264,16 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
         ]);
       };
       newDesc.set = (payload: any) => {
-        (vm.store as Store<any>).commit(vuexKey, payload);
+        vm.store
+          ? (vm.store as Store<any>).commit(vuexKey, payload)
+          : (desc.set as Function).apply(vm, [payload]);
       };
     }
 
     //getter / mutation / action
     if (typeof desc.value === "function") {
-      if (base[getterKeys] && base[getterKeys][key]) {
-        //getters
+      if (hasMarker(base, getterKey, key)) {
+        //@Getters
         vm.getters[key] = (s: any, g: any, rs: any, rg: any): any => {
           return (...payloads: any[]) => {
             return desc.value.apply(
@@ -259,11 +289,13 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
           };
         };
         newDesc.get = () => {
-          return (vm.store as Store<any>).getters[vuexKey];
+          return vm.store
+            ? (vm.store as Store<any>).getters[vuexKey]
+            : desc.value.apply(vm, arguments);
         };
         //
-        //mutations
-      } else if (base[mutationKeys] && base[mutationKeys][key]) {
+        //@Mutations
+      } else if (hasMarker(base, mutationKey, key)) {
         vm.mutations[key] = (state: any, payloads: any) => {
           desc.value.apply(
             vm,
@@ -275,12 +307,13 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
         };
         newDesc.get = () => {
           return (...payloads: any[]) => {
-            (vm.store as Store<any>).commit(vuexKey, payloads);
+            vm.store
+              ? (vm.store as Store<any>).commit(vuexKey, payloads)
+              : desc.value.apply(vm, payloads);
           };
         };
-        //
-        //actions
       } else {
+        //@Action
         vm.actions[key] = (context: any, payloads: any): any => {
           return desc.value.apply(
             vm,
@@ -291,17 +324,14 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
           );
         };
         newDesc.value = (...payloads: any[]): Promise<any> => {
-          return (vm.store as Store<any>).dispatch(vuexKey, payloads);
+          return vm.store
+            ? (vm.store as Store<any>).dispatch(vuexKey, payloads)
+            : desc.value.apply(vm, payloads);
         };
       }
     }
-
-    //
     Object.defineProperty(vm, key, newDesc);
   });
-  //删除key
-  delete base[getterKeys];
-  delete base[mutationKeys];
 
   //接收一个全局action
   vm.actions[actionName] = {
@@ -311,9 +341,22 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
     }
   };
 
-  //
+  //删除key
+  delete base[constructorKey];
+  //delete base[stateKey];
+  delete base[getterKey];
+  delete base[mutationKey];
+  //delete base[actionKey];
+  delete base[excludeKey];
   construct.prototype = vm;
-  return construct;
+  //console.log(vm);
+
+  //return  新的构造函数
+  return function(...args: any[]) {
+    let i = new construct();
+    if (i[constructorKey]) i[constructorKey](...args);
+    return i;
+  };
 }
 
 function getApplyArgs(
