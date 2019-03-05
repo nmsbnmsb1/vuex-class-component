@@ -49,9 +49,9 @@ export function createOptions(
 }
 
 //------------------------------------------------------------------------------------------------------------------------
-function donothing(target: any, key: string, desc?: PropertyDescriptor): any {
-  return desc;
-}
+// function donothing(target: any, key: string, desc?: PropertyDescriptor): any {
+//   return desc;
+// }
 function marker(marker: string) {
   return function(target: any, key: string, desc?: PropertyDescriptor): any {
     (target[marker] || (target[marker] = {}))[key] = 1;
@@ -61,23 +61,24 @@ function marker(marker: string) {
 function hasMarker(target: any, marker: string, key: string): boolean {
   return target[marker] && target[marker][key];
 }
-// function defaultMarker(target: any, key: string): boolean {
+// function exclude(target: any, key: string): boolean {
 //   return (
-//     !hasMarker(target, stateKey, key) &&
-//     !hasMarker(target, getterKey, key) &&
-//     !hasMarker(target, mutationKey, key) &&
-//     !hasMarker(target, actionKey, key) &&
-//     !hasMarker(target, excludeKey, key)
+//     hasMarker(target, excludeKey, key) ||
+//     (target[constructorKey] !== key &&
+//       !hasMarker(target, getterKey, key) &&
+//       !hasMarker(target, mutationKey, key) &&
+//       !hasMarker(target, actionKey, key))
 //   );
 // }
 
+const excludeKey: string = "$_exclude_$";
 const constructorKey: string = "$_constructor_$";
 //const stateKey: string = "$_state_$";
 const getterKey: string = "$_getter_$";
 const mutationKey: string = "$_mutation_$";
-//const actionKey: string = "$_action_$";
-const excludeKey: string = "$_exclude_$";
+const actionKey: string = "$_action_$";
 
+export let Exclude = marker(excludeKey);
 export let Constructor = function(
   target: any,
   key: string,
@@ -86,11 +87,10 @@ export let Constructor = function(
   target[constructorKey] = key;
   return desc;
 };
-export let State = donothing;
+//export let State = marker(stateKey);
 export let Getter = marker(getterKey);
 export let Mutation = marker(mutationKey);
-export let Action = donothing;
-export let Exclude = marker(excludeKey);
+export let Action = marker(actionKey);
 
 //
 interface VuexModule {
@@ -205,37 +205,35 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
         ? (vm.store as Store<any>).commit(vuexKey, payload)
         : (vm.state[key] = payload);
     };
-
     Object.defineProperty(vm, key, newDesc);
   });
-  instance = null;
+  instance = undefined;
 
   //获取类对象属性
   Object.getOwnPropertyNames(base).forEach(key => {
     if (key === "constructor" || (key.startsWith("$_") && key.endsWith("_$")))
       return;
 
-    //
+    //@Exclude
     if (hasMarker(base, excludeKey, key)) {
       vm[key] = base[key];
       return;
-    } else if (base[constructorKey] && base[constructorKey] === key) {
+    }
+    //@Constructor
+    if (base[constructorKey] === key) {
       vm[constructorKey] = base[key];
       return;
     }
     //
     const vuexKey: string = vm.namespaced ? vm.moduleName + "/" + key : key;
-    const desc = Object.getOwnPropertyDescriptor(
-      base,
-      key
-    ) as PropertyDescriptor;
+    let desc = Object.getOwnPropertyDescriptor(base, key) as PropertyDescriptor;
     //console.log(key, descriptor);
-    const newDesc: PropertyDescriptor = {
+    let newDesc: PropertyDescriptor | undefined = {
       configurable: desc.configurable,
       enumerable: desc.enumerable
     };
 
-    //getters  get 实例方法
+    //@Getter  get 实例方法
     if (typeof desc.get === "function") {
       vm.getters[key] = (s: any, g: any, rs: any, rg: any): any => {
         return (desc.get as Function).apply(vm, [
@@ -255,7 +253,7 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
       };
     }
 
-    //mutations set 实例方法
+    //@Mutation set 实例方法
     if (typeof desc.set === "function") {
       vm.mutations[key] = (state: any, payload: any) => {
         (desc.set as Function).apply(vm, [
@@ -312,8 +310,8 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
               : desc.value.apply(vm, payloads);
           };
         };
-      } else {
-        //@Action
+      } else if (hasMarker(base, actionKey, key)) {
+        //@Action 异步,返回一个Promise对象
         vm.actions[key] = (context: any, payloads: any): any => {
           return desc.value.apply(
             vm,
@@ -328,9 +326,13 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
             ? (vm.store as Store<any>).dispatch(vuexKey, payloads)
             : desc.value.apply(vm, payloads);
         };
+      } else {
+        vm[key] = base[key];
+        newDesc = undefined;
       }
     }
-    Object.defineProperty(vm, key, newDesc);
+    //
+    if (newDesc) Object.defineProperty(vm, key, newDesc);
   });
 
   //接收一个全局action
@@ -342,12 +344,12 @@ function moduleFactory(construct: any, options: VuexClassOptions = {}): any {
   };
 
   //删除key
+  delete base[excludeKey];
   delete base[constructorKey];
   //delete base[stateKey];
   delete base[getterKey];
   delete base[mutationKey];
-  //delete base[actionKey];
-  delete base[excludeKey];
+  delete base[actionKey];
   construct.prototype = vm;
   //console.log(vm);
 
@@ -406,6 +408,7 @@ function getArgCount(fn: Function): number {
   if (innerDefaultArgs != null) {
     innerDefaultArgCount = innerDefaultArgs.length;
   }
+
   //console.log(innerDefaultArgCount, perDefaultArgCount);
   return innerDefaultArgCount + defaultArgCount;
 }

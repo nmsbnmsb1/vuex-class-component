@@ -13,6 +13,7 @@ import {
   Constructor,
   Getter,
   Mutation,
+  Action,
   Exclude
 } from "vuex-class-component";
 
@@ -28,6 +29,10 @@ export default class UserState {
   //convert to => store.mutations["user/sex"]
   @Getter
   public sex: number = 1;
+
+  // won't add to store
+  @Exclude
+  public name: string = "";
 
   // since in VuexClass function
   // we will new UserState() to get some instance variables
@@ -57,6 +62,8 @@ export default class UserState {
   }
 
   //convert to => store.actions["user/change"]
+  //Action will always return a Promise Instance
+  @Action
   public change(newName: string, newSex: number): Promise<any> {
     return http
       .request({
@@ -74,7 +81,12 @@ export default class UserState {
       );
   }
 
-  // won't add to store instance
+  // won't add to store
+  private fillData() {
+    //...
+  }
+
+  // won't add to store
   @Exclude
   private doTest() {
     console.log("just a test");
