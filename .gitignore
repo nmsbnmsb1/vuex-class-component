@@ -62,4 +62,6 @@ typings/
 
 .DS_Store
 ref
+commit
 package-lock.json
+tsconfig.json
