@@ -1,8 +1,50 @@
 # vuex-class-component
 
-> 使用 ECMAScript / TypeScript 类语法编写 Vuex 模块。可以使用类语法调用 store 的各种方法。
+> use ECMAScript / TypeScript write Vuex
+
+### UPDATE !!!
+
+> Vue 2.6.0 provided a function - Vue.observable
+> Then the state classes of store can use it to make itself observable.
+> This way is enough to me.
 
 ### Example
+
+./store/UserState.ts
+
+```ts
+export default class UserState {
+  public id: string = "id";
+  public sex: number = 1;
+  public names: string[] = [];
+  public config: { [name: string]: any } = {};
+
+  public addConfig(key: stirng, value: any) {
+    //use Vue.set to make change observable
+    Vue.set(config, key, value);
+  }
+}
+```
+
+./store/index.ts
+
+```ts
+let userState = Vue.observable(new UserState());
+let store = { userState };
+Vue.prototype.$store = store;
+export default store;
+```
+
+./App.vue
+
+```ts
+<template>
+  <!-- name will change -->
+  <div id="app">{{$store.userState.name}}</div>
+</template>
+```
+
+### Example --------------------------------------------------------------------------------------------------------
 
 define moudles
 @/store/modules/user.ts
