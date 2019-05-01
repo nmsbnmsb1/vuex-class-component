@@ -4,11 +4,9 @@
 
 ### UPDATE !!!
 
-> Vue 2.6.0 provided a function - Vue.observable
+> Vue 2.6.0 provided a function - Vue.observable.
 > Then the state classes of store can use it to make itself observable.
 > This way is enough to me.
-
-### Example
 
 ./store/UserState.ts
 
@@ -44,7 +42,7 @@ export default store;
 </template>
 ```
 
-### Example --------------------------------------------------------------------------------------------------------
+### Example -------------------------------
 
 define moudles
 @/store/modules/user.ts
